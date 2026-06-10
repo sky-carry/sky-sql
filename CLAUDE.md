@@ -23,6 +23,7 @@
 - `node scripts/test-sqlsplit.mjs` — SQL 语句拆分器（src/main/db/sqlSplit.ts）的冒烟测试；备份/还原引擎在 src/main/transfer/backup.ts
 - `node scripts/test-typemap.mjs` — 跨库种类型映射与建表（src/main/transfer/ddlBuild.ts，纯函数）的冒烟测试；数据传输引擎在 src/main/transfer/dataTransfer.ts
 - `node scripts/test-datasync.mjs` — 数据同步行级 diff（src/main/transfer/dataSync.ts 的 diffRows 纯函数）的冒烟测试；比对结果缓存在主进程 diffCache（jobId 键），部署后/标签页关闭时需 release
+- `node scripts/test-querybuilder.mjs` — 查询构建器 SQL 生成（src/renderer/src/queryBuilder.ts，纯函数）的冒烟测试
 - SSH/SSL：隧道在 connectionManager 中与连接同生命周期；驱动收到的是"等效 profile"（host/port 指向本地隧道端口）；SSL 文件读取在 src/main/db/ssl.ts
 - 导入导出在 `src/main/transfer/`：进度经 IPC 事件 `transfer:progress` 推送，jobId 由渲染层生成；解析逻辑放 parsers.ts（无 electron 依赖，便于测试）
 - dev 已带 `--watch`：主进程/preload 改动会自动重启 Electron

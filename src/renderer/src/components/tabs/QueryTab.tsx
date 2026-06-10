@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, Button, Select, Tabs } from 'antd'
-import { Play, Sparkles, SquareDashedMousePointer } from 'lucide-react'
+import { Blocks, Play, Sparkles, SquareDashedMousePointer } from 'lucide-react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import { format } from 'sql-formatter'
 import type { QueryResultSet } from '@shared/types'
@@ -8,6 +8,7 @@ import '@/monacoSetup'
 import { ensureSqlCompletion, setCompletionContext } from '@/sqlCompletion'
 import { useAppStore, type TabState } from '@/stores/appStore'
 import { DataGridView } from '@/components/DataGridView'
+import { QueryBuilderDialog } from '@/components/QueryBuilderDialog'
 import { formatterDialect } from '@/utils'
 
 type EditorInstance = Parameters<OnMount>[0]
@@ -26,6 +27,7 @@ export function QueryTab({ tab }: { tab: TabState }): React.JSX.Element {
   const [results, setResults] = useState<QueryResultSet[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [activeResult, setActiveResult] = useState('info')
+  const [builderOpen, setBuilderOpen] = useState(false)
 
   const { profileId, database } = tab
   const profile = profiles.find((p) => p.id === profileId)
@@ -174,6 +176,14 @@ export function QueryTab({ tab }: { tab: TabState }): React.JSX.Element {
         <Button size="small" icon={<Sparkles size={14} />} onClick={beautify}>
           美化 SQL
         </Button>
+        <Button
+          size="small"
+          icon={<Blocks size={14} />}
+          disabled={!profileId || !database}
+          onClick={() => setBuilderOpen(true)}
+        >
+          查询构建器
+        </Button>
         <span className="query-toolbar-spacer" />
         <Select
           size="small"
@@ -210,6 +220,19 @@ export function QueryTab({ tab }: { tab: TabState }): React.JSX.Element {
           }}
         />
       </div>
+      <QueryBuilderDialog
+        open={builderOpen}
+        profileId={profileId}
+        database={database}
+        dbType={profile?.dbType}
+        onClose={() => setBuilderOpen(false)}
+        onApply={(sql) => {
+          const editor = editorRef.current
+          if (!editor) return
+          const current = editor.getValue()
+          editor.setValue(current.trim() ? `${current.trimEnd()}\n\n${sql};\n` : `${sql};\n`)
+        }}
+      />
       <div className="query-results">
         <Tabs
           size="small"

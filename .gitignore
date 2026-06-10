@@ -12,3 +12,4 @@ scripts/.usersql-bundle.cjs
 scripts/.sqlsplit-bundle.cjs
 scripts/.typemap-bundle.cjs
 scripts/.datasync-bundle.cjs
+scripts/.qb-bundle.cjs
