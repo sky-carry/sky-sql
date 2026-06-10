@@ -1,0 +1,14 @@
+node_modules/
+out/
+release/
+dist/
+*.log
+.DS_Store
+docs/screenshot-*.png
+scripts/.ddl-bundle.cjs
+scripts/.parsers-bundle.cjs
+scripts/.tunnel-bundle.cjs
+scripts/.usersql-bundle.cjs
+scripts/.sqlsplit-bundle.cjs
+scripts/.typemap-bundle.cjs
+scripts/.datasync-bundle.cjs
