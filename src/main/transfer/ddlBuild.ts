@@ -1,19 +1,51 @@
 import type { DbType, TableColumnInfo, TableMeta } from '@shared/types'
 
 /** 数据库类型族（mysql 与 mariadb 同族） */
-export function familyOf(dbType: DbType): 'mysql' | 'postgresql' | 'sqlite' {
+export function familyOf(dbType: DbType): 'mysql' | 'postgresql' | 'sqlite' | 'sqlserver' {
   return dbType === 'mariadb' ? 'mysql' : dbType
 }
 
 export function quoteIdent(dbType: DbType, name: string): string {
-  if (familyOf(dbType) === 'mysql') return '`' + name.replace(/`/g, '``') + '`'
+  const fam = familyOf(dbType)
+  if (fam === 'mysql') return '`' + name.replace(/`/g, '``') + '`'
+  if (fam === 'sqlserver') return '[' + name.replace(/]/g, ']]') + ']'
   return '"' + name.replace(/"/g, '""') + '"'
 }
 
-/** 解析 "varchar(255)" / "decimal(10,2)" */
-function parseType(columnType: string): { base: string; len?: string; scale?: string } {
-  const m = /^([a-zA-Z_ ]+?)\s*\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\)/.exec(columnType.trim())
-  if (!m) return { base: columnType.trim().toLowerCase() }
+/** 是否带 schema 前缀的表名（PG 的 schema.table / SQL Server 的 dbo.table） */
+function hasSchemaPrefix(dbType: DbType): boolean {
+  const fam = familyOf(dbType)
+  return fam === 'postgresql' || fam === 'sqlserver'
+}
+
+/** 表引用：PG / SQL Server 的 "schema.table" 按第一个点分段引用，其余整体引用 */
+export function qualifyTable(dbType: DbType, table: string): string {
+  if (hasSchemaPrefix(dbType) && table.includes('.')) {
+    const i = table.indexOf('.')
+    return `${quoteIdent(dbType, table.slice(0, i))}.${quoteIdent(dbType, table.slice(i + 1))}`
+  }
+  return quoteIdent(dbType, table)
+}
+
+/**
+ * 分页后缀：SQL Server 用 OFFSET/FETCH（必须有 ORDER BY，没有时补常量排序），
+ * 其余方言用 LIMIT/OFFSET。
+ */
+export function pageClause(dbType: DbType, limit: number, offset: number, hasOrderBy = false): string {
+  if (familyOf(dbType) === 'sqlserver') {
+    return `${hasOrderBy ? '' : ' ORDER BY (SELECT NULL)'} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`
+  }
+  return ` LIMIT ${limit} OFFSET ${offset}`
+}
+
+/** 解析 "varchar(255)" / "decimal(10,2)" / "nvarchar(max)" */
+function parseType(columnType: string): { base: string; len?: string; scale?: string; max?: boolean } {
+  const t = columnType.trim()
+  // 基础类型名可含数字（datetime2 / float8 等）
+  const mMax = /^([a-zA-Z_][a-zA-Z_0-9 ]*?)\s*\(\s*max\s*\)$/i.exec(t)
+  if (mMax) return { base: mMax[1].trim().toLowerCase(), max: true }
+  const m = /^([a-zA-Z_][a-zA-Z_0-9 ]*?)\s*\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\)/.exec(t)
+  if (!m) return { base: t.toLowerCase() }
   return { base: m[1].trim().toLowerCase(), len: m[2], scale: m[3] }
 }
 
@@ -26,9 +58,56 @@ export function mapColumnType(srcType: DbType, tgtType: DbType, column: TableCol
   const columnType = column.columnType ?? column.dataType
   if (srcFam === tgtFam) return columnType
 
-  const { base, len, scale } = parseType(columnType)
+  const parsed = parseType(columnType)
+  let { base, len, scale } = parsed
+  // SQL Server 源类型先归一化为通用类型名，再走目标方言映射
+  if (srcFam === 'sqlserver') {
+    if (base === 'nvarchar' || base === 'varchar') base = parsed.max ? 'text' : 'varchar'
+    else if (base === 'nchar') base = 'char'
+    else if (base === 'ntext') base = 'text'
+    else if (base === 'image') base = 'blob'
+    else if (base === 'varbinary' || base === 'binary') base = parsed.max ? 'blob' : 'binary'
+    else if (base === 'datetime2' || base === 'smalldatetime') base = 'datetime'
+    else if (base === 'datetimeoffset') base = 'timestamptz'
+    else if (base === 'uniqueidentifier') base = 'uuid'
+    else if (base === 'money') {
+      base = 'decimal'
+      len = '19'
+      scale = '4'
+    } else if (base === 'smallmoney') {
+      base = 'decimal'
+      len = '10'
+      scale = '4'
+    } else if (base === 'float') base = 'double' // SQL Server float 是 8 字节
+    else if (base === 'real') base = 'float'
+    else if (base === 'bit') base = 'boolean'
+  }
   const withLen = (t: string): string =>
     len ? `${t}(${len}${scale ? `,${scale}` : ''})` : t
+
+  if (tgtFam === 'sqlserver') {
+    if ((base === 'tinyint' && len === '1') || base === 'boolean' || base === 'bool') return 'bit'
+    if (base === 'tinyint') return 'tinyint'
+    if (/^(smallint|year|int2)$/.test(base)) return 'smallint'
+    if (/^(int|integer|mediumint|serial|int4)$/.test(base)) return 'int'
+    if (/^(bigint|int8|bigserial)$/.test(base)) return 'bigint'
+    if (/^(decimal|numeric)$/.test(base)) return withLen('decimal')
+    if (/^(float|real|float4)$/.test(base)) return 'real'
+    if (/^(double|double precision|float8)$/.test(base)) return 'float'
+    if (/^(varchar|character varying)$/.test(base)) return len ? `nvarchar(${len})` : 'nvarchar(255)'
+    if (/^(char|character|bpchar)$/.test(base)) return len ? `nchar(${len})` : 'nchar(1)'
+    if (/text$/.test(base)) return 'nvarchar(max)'
+    if (/blob|bytea|binary/.test(base)) return 'varbinary(max)'
+    if (/^(datetime|timestamp|timestamptz)$/.test(base)) return 'datetime2'
+    if (base === 'date') return 'date'
+    if (/^time/.test(base)) return 'time'
+    if (/^json/.test(base)) return 'nvarchar(max)'
+    if (/^(enum|set)$/.test(base)) return 'nvarchar(255)'
+    if (base === 'uuid') return 'uniqueidentifier'
+    if (base === 'bit') return len && len !== '1' ? 'varbinary(8)' : 'bit'
+    if (base === 'interval') return 'nvarchar(64)'
+    return 'nvarchar(max)'
+  }
 
   if (tgtFam === 'sqlite') {
     if (/int|serial|year|bool|bit/.test(base)) return 'INTEGER'
@@ -51,6 +130,8 @@ export function mapColumnType(srcType: DbType, tgtType: DbType, column: TableCol
     if (/text$/.test(base)) return 'text'
     if (/blob|binary/.test(base)) return 'bytea'
     if (base === 'datetime' || base === 'timestamp') return 'timestamp'
+    if (base === 'timestamptz') return 'timestamptz'
+    if (base === 'uuid') return 'uuid'
     if (base === 'date') return 'date'
     if (base === 'time') return 'time'
     if (base === 'year') return 'smallint'
@@ -74,7 +155,7 @@ export function mapColumnType(srcType: DbType, tgtType: DbType, column: TableCol
   if (/^(character|bpchar|char)$/.test(base)) return withLen('char')
   if (base === 'text') return 'text'
   if (base === 'bytea' || base === 'blob') return 'longblob'
-  if (/^timestamp/.test(base)) return 'datetime'
+  if (/^(timestamp|datetime)/.test(base)) return 'datetime'
   if (base === 'date') return 'date'
   if (/^time/.test(base)) return 'time'
   if (/^json/.test(base)) return 'json'
@@ -127,13 +208,18 @@ export function buildCreateTable(
     if (c.isAutoIncrement) {
       if (tgtFam === 'mysql') line += ' AUTO_INCREMENT'
       else if (tgtFam === 'postgresql') line += ' GENERATED BY DEFAULT AS IDENTITY'
+      else if (tgtFam === 'sqlserver') line += ' IDENTITY(1,1)'
     } else if (c.defaultValue !== null && c.defaultValue !== undefined) {
       // 跨库种时函数型默认值不可移植，直接丢弃
-      const def = crossDialect
+      let def = crossDialect
         ? defaultLiteral(c.defaultValue)
         : c.defaultValue.includes('(') || RAW_DEFAULT.test(c.defaultValue) || /^-?\d/.test(c.defaultValue)
           ? c.defaultValue
           : `'${c.defaultValue.replace(/'/g, "''")}'`
+      // SQL Server 没有 TRUE/FALSE 字面量与 CURRENT_TIMESTAMP 之外的别名
+      if (def && crossDialect && tgtFam === 'sqlserver') {
+        def = def.replace(/^TRUE$/i, '1').replace(/^FALSE$/i, '0')
+      }
       if (def) line += ` DEFAULT ${def}`
     }
     if (!c.nullable) line += ' NOT NULL'
@@ -144,14 +230,14 @@ export function buildCreateTable(
     lines.push(`  PRIMARY KEY (${pk.map((c) => q(c.name)).join(', ')})`)
   }
 
-  const statements = [`CREATE TABLE ${q(table)} (\n${lines.join(',\n')}\n)`]
+  const statements = [`CREATE TABLE ${qualifyTable(tgtType, table)} (\n${lines.join(',\n')}\n)`]
 
   if (opts.includeIndexes) {
     for (const i of meta.indexes) {
       // 跨库种不携带索引方法（BTREE/HASH 等不通用）
       const method = !crossDialect && familyOf(tgtType) === 'postgresql' && i.method ? ` USING ${i.method}` : ''
       statements.push(
-        `CREATE ${i.unique ? 'UNIQUE ' : ''}INDEX ${q(`${table}_${i.name}`.slice(0, 60))} ON ${q(table)}${method} (${i.columns.map(q).join(', ')})`
+        `CREATE ${i.unique ? 'UNIQUE ' : ''}INDEX ${q(`${table}_${i.name}`.slice(0, 60))} ON ${qualifyTable(tgtType, table)}${method} (${i.columns.map(q).join(', ')})`
       )
     }
   }
@@ -164,8 +250,8 @@ export function buildFkStatements(tgtType: DbType, table: string, meta: TableMet
   const q = (s: string): string => quoteIdent(tgtType, s)
   return meta.foreignKeys.map(
     (fk) =>
-      `ALTER TABLE ${q(table)} ADD CONSTRAINT ${q(fk.name.slice(0, 60))} FOREIGN KEY (${fk.columns.map(q).join(', ')}) ` +
-      `REFERENCES ${q(fk.refTable)} (${fk.refColumns.map(q).join(', ')})` +
+      `ALTER TABLE ${qualifyTable(tgtType, table)} ADD CONSTRAINT ${q(fk.name.slice(0, 60))} FOREIGN KEY (${fk.columns.map(q).join(', ')}) ` +
+      `REFERENCES ${qualifyTable(tgtType, fk.refTable)} (${fk.refColumns.map(q).join(', ')})` +
       (fk.onDelete && fk.onDelete !== 'NO ACTION' ? ` ON DELETE ${fk.onDelete}` : '') +
       (fk.onUpdate && fk.onUpdate !== 'NO ACTION' ? ` ON UPDATE ${fk.onUpdate}` : '')
   )

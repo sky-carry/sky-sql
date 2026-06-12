@@ -47,6 +47,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/dagre": "^0.7.54",
+    "@types/mssql": "^12.3.0",
     "@types/node": "^25.9.2",
     "@types/papaparse": "^5.5.2",
     "@types/pg": "^8.20.0",
@@ -74,6 +75,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
+    "mssql": "^12.5.5",
     "mysql2": "^3.22.5",
     "papaparse": "^5.5.3",
     "pg": "^8.21.0",

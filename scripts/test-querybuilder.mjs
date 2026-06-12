@@ -66,6 +66,21 @@ eq('单引号转义', generateQuery('sqlite', {
   groupBy: [], orderBy: []
 }), `SELECT *\nFROM "t"\nWHERE "t"."name" = 'o''neil'`)
 
+// SQL Server：TOP 代替 LIMIT，方括号引用，schema.table 分段
+eq('SQL Server TOP', generateQuery('sqlserver', {
+  baseTable: 'sales.orders',
+  joins: [],
+  fields: ['sales.orders.id'],
+  conditions: [],
+  groupBy: [],
+  orderBy: [{ key: '1', column: 'sales.orders.id', dir: 'DESC' }],
+  limit: 10
+}), [
+  'SELECT TOP 10 [sales].[orders].[id]',
+  'FROM [sales].[orders]',
+  'ORDER BY [sales].[orders].[id] DESC'
+].join('\n'))
+
 // 不完整 JOIN 被忽略；空条件被忽略
 eq('忽略不完整片段', generateQuery('mysql', {
   baseTable: 'a',

@@ -86,7 +86,7 @@ function UserDialog({
     }
   }
 
-  const privLabel = isMySql ? '服务器权限' : '角色属性'
+  const privLabel = isMySql ? '服务器权限' : dbType === 'sqlserver' ? '服务器角色' : '角色属性'
 
   return (
     <Modal

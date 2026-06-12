@@ -95,6 +95,30 @@ check('SQLite CREATE 内联主键', ddl.generateCreateTable('sqlite', 'main', sq
   '"id" INTEGER PRIMARY KEY AUTOINCREMENT',
   '"msg" TEXT NOT NULL')
 
+// ---- CREATE TABLE: SQL Server ----
+const mssqlDesign = {
+  name: 'orders',
+  columns: [
+    col({ name: 'id', type: 'int', pk: true, notNull: true, autoIncrement: true }),
+    col({ name: 'title', type: 'nvarchar', length: '100', notNull: true }),
+    col({ name: 'ok', type: 'bit', defaultValue: 'TRUE' })
+  ],
+  indexes: [{ key: 'i1', name: 'idx_title', columns: ['title'], unique: true, method: 'NONCLUSTERED' }],
+  foreignKeys: [{
+    key: 'f1', name: 'fk_orders_user', columns: ['user_id'],
+    refTable: 'users', refColumns: ['id'], onUpdate: 'NO ACTION', onDelete: 'CASCADE'
+  }],
+  comment: ''
+}
+check('MSSQL CREATE', ddl.generateCreateTable('sqlserver', 'mydb', mssqlDesign),
+  'CREATE TABLE [dbo].[orders]',
+  '[id] int IDENTITY(1,1) NOT NULL',
+  '[title] nvarchar(100) NOT NULL',
+  '[ok] bit DEFAULT 1',
+  'PRIMARY KEY ([id])',
+  'CONSTRAINT [fk_orders_user] FOREIGN KEY ([user_id]) REFERENCES [dbo].[users] ([id]) ON DELETE CASCADE',
+  'CREATE UNIQUE NONCLUSTERED INDEX [idx_title] ON [dbo].[orders] ([title])')
+
 // ---- ALTER: MySQL 改列/加列/删列/重命名 ----
 const origDesign = {
   name: 'users',
@@ -142,6 +166,36 @@ check('PG ALTER', ddl.generateAlterTable('postgresql', 'mydb', { name: 'orders',
   'ALTER COLUMN "status" SET NOT NULL',
   `ALTER COLUMN "status" SET DEFAULT 'new'`,
   'RENAME COLUMN "status" TO "state"')
+
+// ---- ALTER: SQL Server 改列/重命名/默认值 ----
+const msOrig = {
+  name: 'orders',
+  columns: [
+    col({ name: 'id', originalName: 'id', type: 'int', pk: true, notNull: true, autoIncrement: true }),
+    col({ name: 'status', originalName: 'status', type: 'nvarchar', length: '20' }),
+    col({ name: 'old_col', originalName: 'old_col', type: 'int' })
+  ],
+  indexes: [{ key: 'i1', originalName: 'idx_a', name: 'idx_a', columns: ['status'], unique: false }],
+  foreignKeys: [], comment: ''
+}
+const msNew = {
+  name: 'orders',
+  columns: [
+    col({ name: 'id', originalName: 'id', type: 'int', pk: true, notNull: true, autoIncrement: true }),
+    col({ name: 'state', originalName: 'status', type: 'nvarchar', length: '40', notNull: true, defaultValue: 'new' }),
+    col({ name: 'amount', type: 'decimal', length: '10', scale: '2' })
+  ],
+  indexes: [],
+  foreignKeys: [], comment: ''
+}
+const msStmts = ddl.generateAlterTable('sqlserver', 'mydb', { name: 'orders', design: msOrig, pkConstraint: 'PK_orders' }, msNew)
+check('MSSQL ALTER', msStmts,
+  'DROP INDEX [idx_a] ON [dbo].[orders]',
+  'ALTER TABLE [dbo].[orders] DROP COLUMN [old_col]',
+  'ALTER TABLE [dbo].[orders] ALTER COLUMN [status] nvarchar(40) NOT NULL',
+  "ALTER TABLE [dbo].[orders] ADD DEFAULT 'new' FOR [status]",
+  "EXEC sp_rename N'[dbo].[orders].[status]', N'state', N'COLUMN'",
+  'ALTER TABLE [dbo].[orders] ADD [amount] decimal(10,2)')
 
 // ---- ALTER: SQLite 不支持的变更要有警告 ----
 const sqliteOrig = {

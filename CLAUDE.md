@@ -7,6 +7,7 @@
 - **技术栈**：Electron + electron-vite + React 19 + TypeScript + antd 6 + zustand；SQL 编辑器用 Monaco（本地打包，勿用 CDN loader）；数据网格用 @glideapps/glide-data-grid（canvas 渲染，需要 `#portal` 挂载点和显式像素尺寸）。
 - **跨平台**：先做 Windows，但所有代码必须保持 mac 兼容（不要用 win32 专属 API；平台差异写在主进程并以 `process.platform` 分支）。
 - **驱动抽象**：所有数据库操作经 `src/main/db/driver.ts` 的 `DatabaseDriver` 接口；新数据库 = 新驱动实现 + `registry.ts` 注册 + `DbType` 扩展。渲染进程绝不直接接触驱动。
+- **SQL Server 方言要点**：分页用 OFFSET/FETCH（必须有 ORDER BY；公共函数 `pageClause`/`qualifyTable` 在 transfer/ddlBuild.ts，传输/备份/导出/同步层禁止手写 LIMIT）；标识符方括号；查询构建器 LIMIT→TOP；自增列显式插值需 IDENTITY_INSERT（驱动 insertRows 与备份文件已处理，开关必须与 INSERT 同语句以保证同连接执行）；单语句绑定参数上限 2100（insertRows 自动分块）。
 - **IPC**：通道名和 API 类型集中在 `src/shared/ipc.ts`；主进程统一用 `ipcHandlers.ts` 的 `handle()` 包装（错误转 `{ok:false,error}`），渲染进程经 `window.skysql` 调用。
 - **数据序列化**：跨 IPC 的单元格值是 `CellValue`（Buffer→binary 标记对象、Date→字符串、BigInt→number/string），转换函数在 `driver.ts` 的 `toCellValue/fromCellValue`。
 - **SQL 安全**：值一律走绑定参数；标识符用各驱动的 `quoteIdent`；limit/offset 经 `safeInt` 校验后内联。

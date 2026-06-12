@@ -102,3 +102,57 @@ export function pgUserStatements(design: UserDesign, currentAttrs: string[] | nu
 export function pgDropUser(name: string): string {
   return `DROP ROLE ${pgIdent(name)}`
 }
+
+/** SQL Server 固定服务器角色 */
+export const MSSQL_SERVER_ROLES = [
+  'sysadmin', 'serveradmin', 'securityadmin', 'processadmin',
+  'setupadmin', 'bulkadmin', 'diskadmin', 'dbcreator'
+]
+
+function msIdent(name: string): string {
+  return '[' + name.replace(/]/g, ']]') + ']'
+}
+
+function msStr(s: string): string {
+  return s.replace(/'/g, "''")
+}
+
+/**
+ * 生成 SQL Server 登录名变更语句。
+ * currentRoles：编辑场景下当前所属的服务器角色（用于 diff），新建传 null。
+ */
+export function mssqlUserStatements(design: UserDesign, currentRoles: string[] | null): string[] {
+  const statements: string[] = []
+
+  if (!design.originalName) {
+    statements.push(
+      `CREATE LOGIN ${msIdent(design.name)} WITH PASSWORD = N'${msStr(design.password ?? '')}', CHECK_POLICY = OFF`
+    )
+    for (const role of design.privileges) {
+      statements.push(`ALTER SERVER ROLE ${msIdent(role)} ADD MEMBER ${msIdent(design.name)}`)
+    }
+    return statements
+  }
+
+  let loginName = design.originalName
+  if (design.name !== design.originalName) {
+    statements.push(`ALTER LOGIN ${msIdent(design.originalName)} WITH NAME = ${msIdent(design.name)}`)
+    loginName = design.name
+  }
+  if (design.password !== undefined && design.password !== '') {
+    statements.push(`ALTER LOGIN ${msIdent(loginName)} WITH PASSWORD = N'${msStr(design.password)}'`)
+  }
+  const current = new Set(currentRoles ?? [])
+  const next = new Set(design.privileges)
+  for (const role of design.privileges.filter((r) => !current.has(r))) {
+    statements.push(`ALTER SERVER ROLE ${msIdent(role)} ADD MEMBER ${msIdent(loginName)}`)
+  }
+  for (const role of [...current].filter((r) => !next.has(r))) {
+    statements.push(`ALTER SERVER ROLE ${msIdent(role)} DROP MEMBER ${msIdent(loginName)}`)
+  }
+  return statements
+}
+
+export function mssqlDropUser(name: string): string {
+  return `DROP LOGIN ${msIdent(name)}`
+}

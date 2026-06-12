@@ -41,10 +41,10 @@ export function emptyBuilderState(): QueryBuilderState {
   return { baseTable: '', joins: [], fields: [], conditions: [], groupBy: [], orderBy: [] }
 }
 
-/** 表名引用（PG 的 schema.table 分段引用） */
+/** 表名引用（PG / SQL Server 的 schema.table 分段引用） */
 function quoteTable(dbType: DbType, table: string): string {
   const q = (s: string): string => quoteIdentFor(dbType, s)
-  if (dbType === 'postgresql' && table.includes('.')) {
+  if ((dbType === 'postgresql' || dbType === 'sqlserver') && table.includes('.')) {
     const i = table.indexOf('.')
     return `${q(table.slice(0, i))}.${q(table.slice(i + 1))}`
   }
@@ -71,7 +71,10 @@ export function generateQuery(dbType: DbType, s: QueryBuilderState): string {
   const qc = (col: string): string => quoteColumn(dbType, col)
   const lines: string[] = []
 
-  lines.push(`SELECT ${s.fields.length > 0 ? s.fields.map(qc).join(', ') : '*'}`)
+  const hasLimit = s.limit !== undefined && Number.isInteger(s.limit) && s.limit > 0
+  // SQL Server 不支持 LIMIT，用 SELECT TOP n
+  const top = dbType === 'sqlserver' && hasLimit ? `TOP ${s.limit} ` : ''
+  lines.push(`SELECT ${top}${s.fields.length > 0 ? s.fields.map(qc).join(', ') : '*'}`)
   lines.push(`FROM ${quoteTable(dbType, s.baseTable)}`)
 
   for (const j of s.joins) {
@@ -98,7 +101,7 @@ export function generateQuery(dbType: DbType, s: QueryBuilderState): string {
     lines.push(`ORDER BY ${orders.map((o) => `${qc(o.column)} ${o.dir}`).join(', ')}`)
   }
 
-  if (s.limit && Number.isInteger(s.limit) && s.limit > 0) {
+  if (hasLimit && dbType !== 'sqlserver') {
     lines.push(`LIMIT ${s.limit}`)
   }
 

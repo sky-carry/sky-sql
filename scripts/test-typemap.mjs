@@ -65,6 +65,54 @@ eq('mysql varchar→sqlite', m.mapColumnType('mysql', 'sqlite', col('varchar', '
 // 同族原样
 eq('mysql→mariadb 原样', m.mapColumnType('mysql', 'mariadb', col('varchar', 'varchar(255) unsigned')), 'varchar(255) unsigned')
 
+// SQL Server → 其他
+eq('mssql nvarchar→pg', m.mapColumnType('sqlserver', 'postgresql', col('nvarchar', 'nvarchar(50)')), 'character varying(50)')
+eq('mssql nvarchar(max)→pg', m.mapColumnType('sqlserver', 'postgresql', col('nvarchar', 'nvarchar(max)')), 'text')
+eq('mssql datetime2→pg', m.mapColumnType('sqlserver', 'postgresql', col('datetime2', 'datetime2(7)')), 'timestamp')
+eq('mssql uniqueidentifier→pg', m.mapColumnType('sqlserver', 'postgresql', col('uniqueidentifier', 'uniqueidentifier')), 'uuid')
+eq('mssql bit→pg', m.mapColumnType('sqlserver', 'postgresql', col('bit', 'bit')), 'boolean')
+eq('mssql money→pg', m.mapColumnType('sqlserver', 'postgresql', col('money', 'money')), 'numeric(19,4)')
+eq('mssql float→pg', m.mapColumnType('sqlserver', 'postgresql', col('float', 'float')), 'double precision')
+eq('mssql varbinary(max)→mysql', m.mapColumnType('sqlserver', 'mysql', col('varbinary', 'varbinary(max)')), 'longblob')
+eq('mssql nvarchar→mysql', m.mapColumnType('sqlserver', 'mysql', col('nvarchar', 'nvarchar(50)')), 'varchar(50)')
+eq('mssql datetime2→mysql', m.mapColumnType('sqlserver', 'mysql', col('datetime2', 'datetime2')), 'datetime')
+eq('mssql bit→sqlite', m.mapColumnType('sqlserver', 'sqlite', col('bit', 'bit')), 'INTEGER')
+
+// 其他 → SQL Server
+eq('mysql varchar→mssql', m.mapColumnType('mysql', 'sqlserver', col('varchar', 'varchar(255)')), 'nvarchar(255)')
+eq('mysql tinyint(1)→mssql', m.mapColumnType('mysql', 'sqlserver', col('tinyint', 'tinyint(1)')), 'bit')
+eq('mysql text→mssql', m.mapColumnType('mysql', 'sqlserver', col('text', 'text')), 'nvarchar(max)')
+eq('mysql datetime→mssql', m.mapColumnType('mysql', 'sqlserver', col('datetime', 'datetime')), 'datetime2')
+eq('mysql longblob→mssql', m.mapColumnType('mysql', 'sqlserver', col('longblob', 'longblob')), 'varbinary(max)')
+eq('pg boolean→mssql', m.mapColumnType('postgresql', 'sqlserver', col('boolean', 'boolean')), 'bit')
+eq('pg uuid→mssql', m.mapColumnType('postgresql', 'sqlserver', col('uuid', 'uuid')), 'uniqueidentifier')
+eq('pg numeric→mssql', m.mapColumnType('postgresql', 'sqlserver', col('numeric', 'numeric(10,2)')), 'decimal(10,2)')
+eq('pg jsonb→mssql', m.mapColumnType('postgresql', 'sqlserver', col('jsonb', 'jsonb')), 'nvarchar(max)')
+
+// 建表：MySQL 源 → SQL Server 目标（IDENTITY + 方括号引用）
+has('跨库建表 mysql→mssql',
+  m.buildCreateTable('sqlserver', 'users', {
+    columns: [
+      { name: 'id', dataType: 'int', columnType: 'int', nullable: false, defaultValue: null, isPrimaryKey: true, isAutoIncrement: true },
+      { name: 'ok', dataType: 'tinyint', columnType: 'tinyint(1)', nullable: false, defaultValue: 'TRUE', isPrimaryKey: false, isAutoIncrement: false }
+    ],
+    indexes: [], foreignKeys: []
+  }, { includeIndexes: false, srcType: 'mysql' }),
+  'CREATE TABLE [users]',
+  '[id] int IDENTITY(1,1) NOT NULL',
+  '[ok] bit DEFAULT 1 NOT NULL',
+  'PRIMARY KEY ([id])')
+
+// 分页方言
+eq('mssql 分页', m.pageClause('sqlserver', 100, 200), ' ORDER BY (SELECT NULL) OFFSET 200 ROWS FETCH NEXT 100 ROWS ONLY')
+eq('mssql 分页（已有排序）', m.pageClause('sqlserver', 100, 0, true), ' OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY')
+eq('mysql 分页', m.pageClause('mysql', 100, 200), ' LIMIT 100 OFFSET 200')
+
+// 表引用
+eq('mssql schema 表引用', m.qualifyTable('sqlserver', 'sales.orders'), '[sales].[orders]')
+eq('mssql 无 schema 表引用', m.qualifyTable('sqlserver', 'orders'), '[orders]')
+eq('mysql 表引用不拆分', m.qualifyTable('mysql', 'a.b'), '`a.b`')
+
 // 建表：MySQL 源 → PG 目标
 const meta = {
   columns: [

@@ -37,7 +37,13 @@ const TYPE_OPTIONS: Record<string, string[]> = {
     'character varying', 'character', 'text', 'boolean', 'json', 'jsonb', 'uuid', 'bytea',
     'date', 'time', 'timestamp', 'timestamptz', 'interval'
   ],
-  sqlite: ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB']
+  sqlite: ['INTEGER', 'TEXT', 'REAL', 'NUMERIC', 'BLOB'],
+  sqlserver: [
+    'int', 'bigint', 'smallint', 'tinyint', 'bit', 'decimal', 'numeric', 'money', 'float', 'real',
+    'nvarchar', 'varchar', 'nchar', 'char', 'ntext', 'text', 'uniqueidentifier', 'xml',
+    'datetime2', 'datetime', 'smalldatetime', 'datetimeoffset', 'date', 'time',
+    'varbinary', 'binary', 'image'
+  ]
 }
 
 const FK_RULES = ['NO ACTION', 'CASCADE', 'RESTRICT', 'SET NULL', 'SET DEFAULT']
@@ -45,7 +51,8 @@ const FK_RULES = ['NO ACTION', 'CASCADE', 'RESTRICT', 'SET NULL', 'SET DEFAULT']
 const INDEX_METHODS: Record<string, string[]> = {
   mysql: ['BTREE', 'HASH'],
   postgresql: ['btree', 'hash', 'gin', 'gist', 'brin'],
-  sqlite: []
+  sqlite: [],
+  sqlserver: ['NONCLUSTERED', 'CLUSTERED']
 }
 
 function typeOptionsFor(dbType?: DbType): string[] {
@@ -379,7 +386,7 @@ export function TableDesignTab({ tab }: { tab: TabState }): React.JSX.Element {
               />
             )
           },
-          ...(dbType === 'sqlite'
+          ...(dbType === 'sqlite' || dbType === 'sqlserver'
             ? []
             : [
                 {
@@ -699,7 +706,7 @@ export function TableDesignTab({ tab }: { tab: TabState }): React.JSX.Element {
           </div>
         </>
       )}
-      {dbType !== 'sqlite' && (
+      {dbType !== 'sqlite' && dbType !== 'sqlserver' && (
         <div className="design-option-row design-option-comment">
           <label>表注释</label>
           <Input.TextArea
@@ -712,6 +719,9 @@ export function TableDesignTab({ tab }: { tab: TabState }): React.JSX.Element {
       )}
       {dbType === 'sqlite' && !isMySql && (
         <div className="design-option-hint">SQLite 没有表级选项。</div>
+      )}
+      {dbType === 'sqlserver' && (
+        <div className="design-option-hint">SQL Server 的表/列注释（扩展属性）暂不支持在设计器中编辑。</div>
       )}
     </div>
   )
@@ -739,7 +749,7 @@ export function TableDesignTab({ tab }: { tab: TabState }): React.JSX.Element {
           size="small"
           style={{ width: 220 }}
           value={design.name}
-          placeholder={dbType === 'postgresql' ? 'schema.表名 或 表名' : '表名'}
+          placeholder={dbType === 'postgresql' || dbType === 'sqlserver' ? 'schema.表名 或 表名' : '表名'}
           onChange={(e) => patch({ name: e.target.value })}
         />
       </div>

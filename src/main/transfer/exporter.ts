@@ -3,6 +3,7 @@ import { once } from 'events'
 import * as XLSX from 'xlsx'
 import type { CellValue, ExportRequest, TransferResult } from '@shared/types'
 import { getDriver } from '../db/connectionManager'
+import { familyOf, pageClause, qualifyTable } from './ddlBuild'
 import { finishJob, isCancelled, reportProgress } from './jobs'
 
 const BATCH_SIZE = 1000
@@ -22,12 +23,14 @@ function csvEscape(v: string | number | boolean | null, delimiter: string): stri
   return s
 }
 
-function sqlLiteral(v: CellValue): string {
+/** mssql=true 时布尔写 1/0、二进制写 0x 前缀（SQL Server 无 TRUE/FALSE 与 X'' 字面量） */
+function sqlLiteral(v: CellValue, mssql: boolean): string {
   if (v === null) return 'NULL'
   if (typeof v === 'number') return String(v)
-  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
+  if (typeof v === 'boolean') return mssql ? (v ? '1' : '0') : v ? 'TRUE' : 'FALSE'
   if (typeof v === 'object' && '__type' in v) {
-    return `X'${Buffer.from(v.base64, 'base64').toString('hex')}'`
+    const hex = Buffer.from(v.base64, 'base64').toString('hex')
+    return mssql ? `0x${hex}` : `X'${hex}'`
   }
   return `'${String(v).replace(/'/g, "''")}'`
 }
@@ -49,15 +52,11 @@ export async function exportTable(req: ExportRequest): Promise<TransferResult> {
     : allColumns.map((c) => c.name)
   if (columns.length === 0) throw new Error('没有可导出的列')
 
-  // PG 的表名可能带 schema 前缀
+  // PG / SQL Server 的表名可能带 schema 前缀；MySQL 加库名前缀
+  const dbType = driver.profile.dbType
+  const isMssql = dbType === 'sqlserver'
   const tableRef =
-    driver.profile.dbType === 'postgresql'
-      ? req.table.includes('.')
-        ? `${q(req.table.split('.')[0])}.${q(req.table.split('.').slice(1).join('.'))}`
-        : q(req.table)
-      : driver.profile.dbType === 'sqlite'
-        ? q(req.table)
-        : `${q(req.database)}.${q(req.table)}`
+    familyOf(dbType) === 'mysql' ? `${q(req.database)}.${q(req.table)}` : qualifyTable(dbType, req.table)
   const selectCols = columns.map(q).join(', ')
 
   const countRes = await driver.query(`SELECT COUNT(*) AS c FROM ${tableRef}`, req.database)
@@ -104,7 +103,7 @@ export async function exportTable(req: ExportRequest): Promise<TransferResult> {
         for (let offset = 0; ; offset += BATCH_SIZE) {
           if (isCancelled(req.jobId)) throw new Error('已取消')
           const res = await driver.query(
-            `SELECT ${selectCols} FROM ${tableRef} LIMIT ${BATCH_SIZE} OFFSET ${offset}`,
+            `SELECT ${selectCols} FROM ${tableRef}${pageClause(dbType, BATCH_SIZE, offset)}`,
             req.database
           )
           const rows = res[0]?.rows ?? []
@@ -120,7 +119,7 @@ export async function exportTable(req: ExportRequest): Promise<TransferResult> {
               chunk += (first ? '' : ',\n') + '  ' + JSON.stringify(obj)
               first = false
             } else {
-              chunk += `INSERT INTO ${tableRef} (${selectCols}) VALUES (${row.map(sqlLiteral).join(', ')});\n`
+              chunk += `INSERT INTO ${tableRef} (${selectCols}) VALUES (${row.map((v) => sqlLiteral(v, isMssql)).join(', ')});\n`
             }
           }
           if (chunk) await write(stream, chunk)

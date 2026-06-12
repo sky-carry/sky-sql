@@ -11,11 +11,14 @@ export function cellToText(v: CellValue): string {
 /** 按数据库类型引用标识符（渲染进程侧生成 DDL 用） */
 export function quoteIdentFor(dbType: DbType, name: string): string {
   if (dbType === 'mysql' || dbType === 'mariadb') return '`' + name.replace(/`/g, '``') + '`'
+  if (dbType === 'sqlserver') return '[' + name.replace(/]/g, ']]') + ']'
   return '"' + name.replace(/"/g, '""') + '"'
 }
 
 /** sql-formatter 的方言映射 */
-export function formatterDialect(dbType?: DbType): 'mysql' | 'postgresql' | 'sqlite' | 'sql' {
+export function formatterDialect(
+  dbType?: DbType
+): 'mysql' | 'postgresql' | 'sqlite' | 'transactsql' | 'sql' {
   switch (dbType) {
     case 'mysql':
     case 'mariadb':
@@ -24,6 +27,8 @@ export function formatterDialect(dbType?: DbType): 'mysql' | 'postgresql' | 'sql
       return 'postgresql'
     case 'sqlite':
       return 'sqlite'
+    case 'sqlserver':
+      return 'transactsql'
     default:
       return 'sql'
   }

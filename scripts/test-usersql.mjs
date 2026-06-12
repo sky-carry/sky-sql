@@ -103,6 +103,42 @@ check('PG 重命名',
 // ---- PG 删除 ----
 check('PG 删除', [u.pgDropUser('dev')], 'DROP ROLE "dev"')
 
+// ---- SQL Server 新建登录 ----
+check('MSSQL 新建',
+  u.mssqlUserStatements({ name: 'app', password: "p'wd", privileges: ['dbcreator', 'bulkadmin'] }, null),
+  "CREATE LOGIN [app] WITH PASSWORD = N'p''wd', CHECK_POLICY = OFF",
+  'ALTER SERVER ROLE [dbcreator] ADD MEMBER [app]',
+  'ALTER SERVER ROLE [bulkadmin] ADD MEMBER [app]')
+
+// ---- SQL Server 编辑：角色 diff ----
+check('MSSQL 角色 diff',
+  u.mssqlUserStatements(
+    { originalName: 'app', name: 'app', password: undefined, privileges: ['sysadmin'] },
+    ['dbcreator']
+  ),
+  'ALTER SERVER ROLE [sysadmin] ADD MEMBER [app]',
+  'ALTER SERVER ROLE [dbcreator] DROP MEMBER [app]')
+
+// ---- SQL Server 重命名 + 改密码 ----
+check('MSSQL 重命名改密码',
+  u.mssqlUserStatements(
+    { originalName: 'a', name: 'b', password: 'new', privileges: [] },
+    []
+  ),
+  'ALTER LOGIN [a] WITH NAME = [b]',
+  "ALTER LOGIN [b] WITH PASSWORD = N'new'")
+
+// ---- SQL Server 无变更不应产生语句 ----
+const msNoop = u.mssqlUserStatements(
+  { originalName: 'app', name: 'app', password: undefined, privileges: ['dbcreator'] },
+  ['dbcreator']
+)
+if (msNoop.length === 0) console.log('✓ MSSQL 无变更为空')
+else { failures++; console.error(`✗ MSSQL 无变更为空 — 实际: ${msNoop.join(';')}`) }
+
+// ---- SQL Server 删除 ----
+check('MSSQL 删除', [u.mssqlDropUser('app')], 'DROP LOGIN [app]')
+
 if (failures > 0) {
   console.error(`\n${failures} 个用例失败`)
   process.exit(1)

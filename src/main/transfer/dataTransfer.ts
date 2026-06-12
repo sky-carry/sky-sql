@@ -1,7 +1,7 @@
 import type { DataTransferRequest, DataTransferResult } from '@shared/types'
 import { getDriver } from '../db/connectionManager'
 import { finishJob, isCancelled, reportProgress } from './jobs'
-import { buildCreateTable, buildFkStatements, familyOf, quoteIdent } from './ddlBuild'
+import { buildCreateTable, buildFkStatements, pageClause, qualifyTable, quoteIdent } from './ddlBuild'
 
 const READ_BATCH = 1000
 const INSERT_BATCH = 500
@@ -50,7 +50,7 @@ export async function runDataTransfer(req: DataTransferRequest): Promise<DataTra
       if (req.options.includeStructure) {
         const statements: string[] = []
         if (req.options.dropTarget) {
-          statements.push(`DROP TABLE IF EXISTS ${quoteIdent(tgtType, table)}`)
+          statements.push(`DROP TABLE IF EXISTS ${qualifyTable(tgtType, table)}`)
         }
         statements.push(
           ...buildCreateTable(tgtType, table, meta, {
@@ -82,15 +82,8 @@ export async function runDataTransfer(req: DataTransferRequest): Promise<DataTra
 
       if (req.options.includeData) {
         const sq = (s: string): string => quoteIdent(srcType, s)
-        // PG 源的表名可能带 schema
-        const srcTable =
-          familyOf(srcType) === 'postgresql' && table.includes('.')
-            ? table
-                .split(/\.(.+)/)
-                .filter(Boolean)
-                .map(sq)
-                .join('.')
-            : sq(table)
+        // PG / SQL Server 源的表名可能带 schema
+        const srcTable = qualifyTable(srcType, table)
         const columns = meta.columns.map((c) => c.name)
         const colList = columns.map(sq).join(', ')
 
@@ -99,7 +92,7 @@ export async function runDataTransfer(req: DataTransferRequest): Promise<DataTra
           let rows
           try {
             const res = await src.query(
-              `SELECT ${colList} FROM ${srcTable} LIMIT ${READ_BATCH} OFFSET ${offset}`,
+              `SELECT ${colList} FROM ${srcTable}${pageClause(srcType, READ_BATCH, offset)}`,
               req.source.database
             )
             rows = res[0]?.rows ?? []

@@ -1,17 +1,19 @@
-/** 数据库类型（后续扩展：oracle / sqlserver / mongodb / redis） */
-export type DbType = 'mysql' | 'mariadb' | 'postgresql' | 'sqlite'
+/** 数据库类型（后续扩展：oracle / mongodb / redis） */
+export type DbType = 'mysql' | 'mariadb' | 'postgresql' | 'sqlite' | 'sqlserver'
 
 export const DB_TYPE_LABELS: Record<DbType, string> = {
   mysql: 'MySQL',
   mariadb: 'MariaDB',
   postgresql: 'PostgreSQL',
-  sqlite: 'SQLite'
+  sqlite: 'SQLite',
+  sqlserver: 'SQL Server'
 }
 
 export const DB_DEFAULT_PORTS: Partial<Record<DbType, number>> = {
   mysql: 3306,
   mariadb: 3306,
-  postgresql: 5432
+  postgresql: 5432,
+  sqlserver: 1433
 }
 
 /** SSH 隧道配置（密码与私钥口令加密存储） */
@@ -49,7 +51,7 @@ export interface ConnectionProfile {
   port?: number
   user?: string
   password?: string
-  /** PostgreSQL 的初始数据库（默认 postgres） */
+  /** PostgreSQL / SQL Server 的初始数据库（默认 postgres / master） */
   database?: string
   /** SQLite 数据库文件路径 */
   filePath?: string

@@ -88,6 +88,7 @@ export function ConnectionDialog(): React.JSX.Element {
   const { open, dbType, profile } = connDialog
   const isSqlite = dbType === 'sqlite'
   const isPg = dbType === 'postgresql'
+  const isMssql = dbType === 'sqlserver'
 
   const sshEnabled = Form.useWatch(['ssh', 'enabled'], form)
   const sshAuthType = Form.useWatch(['ssh', 'authType'], form)
@@ -129,16 +130,16 @@ export function ConnectionDialog(): React.JSX.Element {
             name: `${DB_TYPE_LABELS[dbType]}连接`,
             host: isSqlite ? undefined : 'localhost',
             port: DB_DEFAULT_PORTS[dbType],
-            user: dbType === 'postgresql' ? 'postgres' : 'root',
+            user: isPg ? 'postgres' : isMssql ? 'sa' : 'root',
             password: undefined,
-            database: isPg ? 'postgres' : undefined,
+            database: isPg ? 'postgres' : isMssql ? 'master' : undefined,
             filePath: undefined,
             group: undefined,
             ssh: { enabled: false, port: 22, authType: 'password' },
             ssl: { enabled: false, rejectUnauthorized: false }
           }
     )
-  }, [open, profile, dbType, form, isSqlite, isPg])
+  }, [open, profile, dbType, form, isSqlite, isPg, isMssql])
 
   const collectProfile = (): Partial<ConnectionProfile> => {
     const v = form.getFieldsValue()
@@ -253,9 +254,9 @@ export function ConnectionDialog(): React.JSX.Element {
           <Form.Item name="password" label="密码">
             <Input.Password placeholder={profile ? '留空保持不变' : ''} />
           </Form.Item>
-          {isPg && (
+          {(isPg || isMssql) && (
             <Form.Item name="database" label="初始数据库">
-              <Input placeholder="postgres" />
+              <Input placeholder={isPg ? 'postgres' : 'master'} />
             </Form.Item>
           )}
         </>

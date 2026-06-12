@@ -3,6 +3,7 @@ import type { DatabaseDriver } from './driver'
 import { MySqlDriver, testMySql } from './drivers/mysql'
 import { PostgresDriver, testPostgres } from './drivers/postgres'
 import { SqliteDriver, testSqlite } from './drivers/sqlite'
+import { SqlServerDriver, testSqlServer } from './drivers/sqlserver'
 import { withTunnel } from './sshTunnel'
 
 export function createDriver(profile: ConnectionProfile): DatabaseDriver {
@@ -14,6 +15,8 @@ export function createDriver(profile: ConnectionProfile): DatabaseDriver {
       return new PostgresDriver(profile)
     case 'sqlite':
       return new SqliteDriver(profile)
+    case 'sqlserver':
+      return new SqlServerDriver(profile)
     default:
       throw new Error(`暂不支持的数据库类型: ${profile.dbType}`)
   }
@@ -41,6 +44,8 @@ export async function testProfile(profile: Partial<ConnectionProfile>): Promise<
         return await testPostgres(effective)
       case 'sqlite':
         return await testSqlite(effective)
+      case 'sqlserver':
+        return await testSqlServer(effective)
       default:
         return { ok: false, message: `暂不支持的数据库类型: ${effective.dbType}` }
     }
