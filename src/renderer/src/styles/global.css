@@ -181,18 +181,28 @@ body,
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
+  padding-inline: 2px;
+}
+
+/* 收紧展开箭头与图标的间距（缩进单位同步缩小，避免多级缩进时箭头错位） */
+.tree-body .ant-tree-switcher {
+  width: 18px;
+}
+
+.tree-body .ant-tree-indent-unit {
+  width: 18px;
 }
 
 .tree-body .ant-tree-iconEle {
   display: inline-flex !important;
   align-items: center;
   width: auto;
-  margin-right: 2px;
+  margin-right: 0;
 }
 
 .tree-icon {
   vertical-align: -2px;
-  margin-right: 4px;
+  margin-right: 3px;
 }
 
 .tree-icon.conn {
