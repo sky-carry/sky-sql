@@ -5,6 +5,7 @@ dist/
 *.log
 .DS_Store
 docs/screenshot-*.png
+deploy-web/
 scripts/.ddl-bundle.cjs
 scripts/.parsers-bundle.cjs
 scripts/.tunnel-bundle.cjs
