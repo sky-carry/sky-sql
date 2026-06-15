@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipcHandlers'
 import { closeAll } from './db/connectionManager'
+import { setupAutoUpdate } from './updater'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -41,6 +42,7 @@ app.commandLine.appendSwitch('in-process-gpu')
 app.whenReady().then(() => {
   registerIpcHandlers()
   createWindow()
+  setupAutoUpdate() // 打包版启动后检查更新
 
   // macOS：点击 Dock 图标重建窗口
   app.on('activate', () => {
