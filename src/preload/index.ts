@@ -57,6 +57,10 @@ const api: SkySqlApi = {
     compare: (req) => call(IPC.SYNC_DATA_COMPARE, req),
     deploy: (req) => call(IPC.SYNC_DATA_DEPLOY, req),
     release: (jobId) => call(IPC.SYNC_DATA_RELEASE, jobId)
+  },
+  app: {
+    version: () => call(IPC.APP_VERSION),
+    checkUpdate: () => call(IPC.APP_CHECK_UPDATE)
   }
 }
 

@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC, type IpcResponse } from '@shared/ipc'
 import type {
   ApplyEditsRequest,
@@ -23,6 +23,7 @@ import { runBackup, runRestore } from './transfer/backup'
 import { runDataTransfer } from './transfer/dataTransfer'
 import { compareData, deployDataSync, releaseSyncJob } from './transfer/dataSync'
 import { cancelJob } from './transfer/jobs'
+import { checkForUpdatesManually } from './updater'
 
 /** 统一包装：异常转为 { ok: false, error } 返回，避免 invoke 抛出带前缀的错误 */
 function handle<T>(channel: string, fn: (...args: never[]) => Promise<T> | T): void {
@@ -37,6 +38,10 @@ function handle<T>(channel: string, fn: (...args: never[]) => Promise<T> | T): v
 }
 
 export function registerIpcHandlers(): void {
+  handle(IPC.APP_VERSION, () => app.getVersion())
+  handle(IPC.APP_CHECK_UPDATE, () => {
+    checkForUpdatesManually()
+  })
   handle(IPC.PROFILES_LIST, () => listProfiles())
   handle(IPC.PROFILES_SAVE, (profile: Partial<ConnectionProfile>) => saveProfile(profile))
   handle(IPC.PROFILES_REMOVE, async (id: string) => {

@@ -59,6 +59,8 @@ export const IPC = {
   SYNC_DATA_COMPARE: 'syncData:compare',
   SYNC_DATA_DEPLOY: 'syncData:deploy',
   SYNC_DATA_RELEASE: 'syncData:release',
+  APP_VERSION: 'app:version',
+  APP_CHECK_UPDATE: 'app:checkUpdate',
   /** 主进程 → 渲染进程的进度事件 */
   TRANSFER_PROGRESS_EVENT: 'transfer:progress'
 } as const
@@ -115,5 +117,11 @@ export interface SkySqlApi {
     compare(req: DataSyncCompareRequest): Promise<TableSyncDiff[]>
     deploy(req: DataSyncDeployRequest): Promise<DataSyncDeployResult>
     release(jobId: string): Promise<void>
+  }
+  app: {
+    /** 当前应用版本号 */
+    version(): Promise<string>
+    /** 手动检查更新（弹原生对话框反馈） */
+    checkUpdate(): Promise<void>
   }
 }
